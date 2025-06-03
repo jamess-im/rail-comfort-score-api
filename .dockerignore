@@ -1,0 +1,52 @@
+# Task 8.1: Docker ignore file
+.git
+.gitignore
+README.md
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.DS_Store
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Jupyter notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints
+
+# Data files (except the API database)
+data/
+duck
+*.db
+!api/train_comfort_api_lookups.sqlite
+
+# Test files
+tests/
+
+# Documentation
+*.md
+!README.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db 
