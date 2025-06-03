@@ -32,7 +32,7 @@ scaler = None
 target_encoder = None
 feature_encoders = None
 feature_list = None
-db_path = "api/train_comfort_api_lookups.sqlite"
+db_path = "train_comfort_api_lookups.sqlite"
 
 
 class PredictionRequest(BaseModel):
@@ -63,7 +63,7 @@ async def load_model_and_database():
 
     try:
         # Load trained model
-        model_path = "models/xgboost_comfort_classifier.joblib"
+        model_path = "../models/xgboost_comfort_classifier.joblib"
         if os.path.exists(model_path):
             model = joblib.load(model_path)
             print(f"✅ Model loaded from {model_path}")
@@ -72,25 +72,25 @@ async def load_model_and_database():
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
         # Load target encoder
-        target_encoder_path = "models/target_encoder.joblib"
+        target_encoder_path = "../models/target_encoder.joblib"
         if os.path.exists(target_encoder_path):
             target_encoder = joblib.load(target_encoder_path)
             print("✅ Target encoder loaded")
 
         # Load feature encoders
-        encoders_path = "models/feature_encoders.joblib"
+        encoders_path = "../models/feature_encoders.joblib"
         if os.path.exists(encoders_path):
             feature_encoders = joblib.load(encoders_path)
             print("✅ Feature encoders loaded")
 
         # Load feature list
-        feature_list_path = "models/feature_list.joblib"
+        feature_list_path = "../models/feature_list.joblib"
         if os.path.exists(feature_list_path):
             feature_list = joblib.load(feature_list_path)
             print(f"✅ Feature list loaded: {len(feature_list)} features")
 
         # Load scaler if it exists
-        scaler_path = "models/feature_scaler.joblib"
+        scaler_path = "../models/feature_scaler.joblib"
         if os.path.exists(scaler_path):
             scaler = joblib.load(scaler_path)
             print("✅ Scaler loaded")
@@ -140,7 +140,7 @@ def get_station_coordinates(station_name: str) -> Optional[tuple]:
         conn.close()
 
 
-def identify_service_and_next_stop(from_station: str, departure_dt: datetime) -> Dict:
+def identify_service_and_next_stop(from_station: str, to_station: str, departure_dt: datetime) -> Dict:
     """Identify relevant service and actual next stop from bundled SQLite."""
     conn = sqlite3.connect(db_path)
     try:
@@ -148,8 +148,50 @@ def identify_service_and_next_stop(from_station: str, departure_dt: datetime) ->
         hour = departure_dt.hour
         day_of_week = departure_dt.weekday()  # 0=Monday, 6=Sunday
 
-        # Find matching services with nearest time logic
-        query = """
+        # First priority: Find direct service from origin to destination at exact time
+        direct_query = """
+        SELECT headcode, rsid, stationName_to, frequency
+        FROM service_routes_summary_mvp 
+        WHERE stationName_from = ? 
+        AND stationName_to = ?
+        AND hour = ?
+        AND day_of_week = ?
+        ORDER BY frequency DESC 
+        LIMIT 1
+        """
+
+        result = conn.execute(direct_query, (from_station, to_station, hour, day_of_week)).fetchone()
+
+        if result:
+            return {
+                "headcode": result[0],
+                "rsid": result[1],
+                "next_stop": result[2],
+                "frequency": result[3],
+            }
+        
+        # Second priority: Find direct service from origin to destination at similar time
+        direct_similar_time_query = """
+        SELECT headcode, rsid, stationName_to, frequency
+        FROM service_routes_summary_mvp 
+        WHERE stationName_from = ? 
+        AND stationName_to = ?
+        ORDER BY ABS(hour - ?) ASC, frequency DESC
+        LIMIT 1
+        """
+        result = conn.execute(direct_similar_time_query, (from_station, to_station, hour)).fetchone()
+
+        if result:
+            return {
+                "headcode": result[0],
+                "rsid": result[1],
+                "next_stop": result[2],
+                "frequency": result[3],
+                "time_fallback": True,
+            }
+
+        # Third priority: Find any service from origin at exact time (original logic)
+        origin_query = """
         SELECT headcode, rsid, stationName_to, frequency
         FROM service_routes_summary_mvp 
         WHERE stationName_from = ? 
@@ -159,7 +201,7 @@ def identify_service_and_next_stop(from_station: str, departure_dt: datetime) ->
         LIMIT 1
         """
 
-        result = conn.execute(query, (from_station, hour, day_of_week)).fetchone()
+        result = conn.execute(origin_query, (from_station, hour, day_of_week)).fetchone()
 
         if result:
             return {
@@ -167,30 +209,31 @@ def identify_service_and_next_stop(from_station: str, departure_dt: datetime) ->
                 "rsid": result[1],
                 "next_stop": result[2],
                 "frequency": result[3],
+                "route_fallback": True,
+            }
+        
+        # Final fallback: find any service from this station at similar time
+        fallback_query = """
+        SELECT headcode, rsid, stationName_to, frequency
+        FROM service_routes_summary_mvp 
+        WHERE stationName_from = ? 
+        ORDER BY ABS(hour - ?) ASC, frequency DESC
+        LIMIT 1
+        """
+        result = conn.execute(fallback_query, (from_station, hour)).fetchone()
+
+        if result:
+            return {
+                "headcode": result[0],
+                "rsid": result[1],
+                "next_stop": result[2],
+                "frequency": result[3],
+                "fallback": True,
             }
         else:
-            # Fallback: find any service from this station at similar time
-            fallback_query = """
-            SELECT headcode, rsid, stationName_to, frequency
-            FROM service_routes_summary_mvp 
-            WHERE stationName_from = ? 
-            ORDER BY ABS(hour - ?) ASC, frequency DESC
-            LIMIT 1
-            """
-            result = conn.execute(fallback_query, (from_station, hour)).fetchone()
-
-            if result:
-                return {
-                    "headcode": result[0],
-                    "rsid": result[1],
-                    "next_stop": result[2],
-                    "frequency": result[3],
-                    "fallback": True,
-                }
-            else:
-                raise HTTPException(
-                    status_code=404, detail=f"No services found from {from_station}"
-                )
+            raise HTTPException(
+                status_code=404, detail=f"No services found from {from_station}"
+            )
 
     finally:
         conn.close()
@@ -503,7 +546,7 @@ async def predict_comfort(request: PredictionRequest):
 
         # Identify relevant service and actual next stop
         service_info = identify_service_and_next_stop(
-            request.from_station, departure_dt
+            request.from_station, request.to_station, departure_dt
         )
 
         # Fetch historical averages for arrival state
@@ -571,6 +614,8 @@ async def predict_comfort(request: PredictionRequest):
                 "rsid": service_info["rsid"],
                 "next_stop": service_info["next_stop"],
                 "fallback_used": str(service_info.get("fallback", False)),
+                "time_fallback": str(service_info.get("time_fallback", False)),
+                "route_fallback": str(service_info.get("route_fallback", False)),
             },
         )
 
