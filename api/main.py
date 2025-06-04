@@ -49,7 +49,7 @@ class ComfortPrediction(BaseModel):
     from_station: str
     to_station: str
     departure_datetime: str
-    standard_class: Dict[str, Any]  # {"comfort_tier": "Moderate", "confidence": 0.85}
+    standard_class: Dict[str, Any]  # {"comfort_tier": "Moderate", "confidence": 0.85, "numeric_score": 2}
     first_class: Dict[str, Any]
     service_info: Dict[str, str]  # headcode, rsid, etc.
 
@@ -589,18 +589,24 @@ async def predict_comfort(request: PredictionRequest):
         std_proba = model.predict_proba(std_features_scaled)[0]
         first_proba = model.predict_proba(first_features_scaled)[0]
 
-        # Get class names
+        # Get class names and create numeric mapping
         class_names = ["Busy", "Moderate", "Quiet"]
+        # Numeric score: 1=Busy (least comfortable), 2=Moderate, 3=Quiet (most comfortable)
+        class_to_numeric = {"Busy": 1, "Moderate": 2, "Quiet": 3}
 
         # Format predictions
+        std_predicted_class = class_names[np.argmax(std_proba)]
         std_prediction = {
-            "comfort_tier": class_names[np.argmax(std_proba)],
+            "comfort_tier": std_predicted_class,
             "confidence": float(np.max(std_proba)),
+            "numeric_score": class_to_numeric[std_predicted_class],
         }
 
+        first_predicted_class = class_names[np.argmax(first_proba)]
         first_prediction = {
-            "comfort_tier": class_names[np.argmax(first_proba)],
+            "comfort_tier": first_predicted_class,
             "confidence": float(np.max(first_proba)),
+            "numeric_score": class_to_numeric[first_predicted_class],
         }
 
         return ComfortPrediction(

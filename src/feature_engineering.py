@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Feature Engineering for Train Comfort Predictor
-Task 4.3: Extract time features, location features, and prepare categorical encoding
 """
 
 import duckdb
@@ -45,13 +44,24 @@ def extract_location_features(df):
     """Parse string coordinates into numerical latitude and longitude."""
     print("Extracting location features...")
     
+    # Handle empty coordinates by replacing with NaN, then filling with default values
+    def safe_coordinate_parse(coord_series, index):
+        """Safely parse coordinates, handling empty strings."""
+        return coord_series.str.split(',').str[index].replace('', np.nan).astype(float)
+    
     # Parse from station coordinates
-    df['from_lat'] = df['stationLocation_from'].str.split(',').str[0].astype(float)
-    df['from_lon'] = df['stationLocation_from'].str.split(',').str[1].astype(float)
+    df['from_lat'] = safe_coordinate_parse(df['stationLocation_from'], 0)
+    df['from_lon'] = safe_coordinate_parse(df['stationLocation_from'], 1)
     
     # Parse to station coordinates  
-    df['to_lat'] = df['stationLocation_to'].str.split(',').str[0].astype(float)
-    df['to_lon'] = df['stationLocation_to'].str.split(',').str[1].astype(float)
+    df['to_lat'] = safe_coordinate_parse(df['stationLocation_to'], 0)
+    df['to_lon'] = safe_coordinate_parse(df['stationLocation_to'], 1)
+    
+    # Fill missing coordinates with UK center coordinates (approximate)
+    df['from_lat'].fillna(54.0, inplace=True)  # UK center latitude
+    df['from_lon'].fillna(-2.0, inplace=True)  # UK center longitude
+    df['to_lat'].fillna(54.0, inplace=True)
+    df['to_lon'].fillna(-2.0, inplace=True)
     
     # Calculate distance between stations (Haversine formula approximation)
     def haversine_distance(lat1, lon1, lat2, lon2):
@@ -74,7 +84,7 @@ def extract_location_features(df):
     
     # Create location-based features
     # London stations (approximate area)
-    london_stations = ['London Paddington', 'London Victoria', 'London Waterloo']
+    london_stations = ['London Paddington', 'London Victoria', 'London Waterloo', 'London Kings Cross']
     df['from_london'] = df['stationName_from'].isin(london_stations).astype(int)
     df['to_london'] = df['stationName_to'].isin(london_stations).astype(int)
     
@@ -134,16 +144,16 @@ def create_occupancy_features(df):
                             df['vehicle_capacity'] * 100)
     
     # Capacity utilization
-    df['capacity_utilization'] = (df['relevant_passengers_on_leg_departure'] / 
-                                 df['vehicle_capacity'] * 100)
+    # df['capacity_utilization'] = (df['relevant_passengers_on_leg_departure'] / 
+    #                              df['vehicle_capacity'] * 100)
     
     print(f"Added occupancy features: occupancy_percentage_std, occupancy_percentage_first, total_occupancy, total_occupancy_percentage, boarding_ratio, alighting_ratio, capacity_utilization")
     return df
 
 
 def feature_engineering_pipeline():
-    """Complete feature engineering pipeline for Task 4.3."""
-    print("=== STARTING FEATURE ENGINEERING (Task 4.3) ===")
+    """Complete feature engineering pipeline"""
+    print("=== STARTING FEATURE ENGINEERING ===")
     
     # Load data
     conn = duckdb.connect('duck')
@@ -171,12 +181,12 @@ def feature_engineering_pipeline():
     # Display some sample engineered features
     feature_sample = df[['leg_departure_dt', 'hour_of_day', 'is_weekend', 'time_period',
                         'route_distance_km', 'from_london', 'occupancy_percentage_std',
-                        'capacity_utilization']].head()
+                        ]].head()
     print(f"\nSample of engineered features:")
     print(feature_sample)
     
     conn.close()
-    print(f"\n=== TASK 4.3 COMPLETE ===")
+    print(f"\n=== TASK COMPLETE ===")
     return df, encoders
 
 

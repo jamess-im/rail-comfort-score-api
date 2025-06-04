@@ -26,6 +26,7 @@ def create_sample_train_data():
         ('London Paddington', '51.5154,-0.1755'),
         ('London Victoria', '51.4952,-0.1441'),
         ('London Waterloo', '51.5036,-0.1143'),
+        ('London Kings Cross', '51.5308,-0.1238'),
         ('Birmingham New Street', '52.4778,-1.8987'),
         ('Manchester Piccadilly', '53.4775,-2.2308'),
         ('Leeds', '53.7955,-1.5491'),
@@ -37,7 +38,8 @@ def create_sample_train_data():
         ('Liverpool Lime Street', '53.4074,-2.9772'),
         ('Reading', '51.4587,-0.9700'),
         ('Oxford', '51.7537,-1.2684'),
-        ('Cambridge', '52.1943,0.1371')
+        ('Cambridge', '52.1943,0.1371'),
+        ('York', '53.9583,-1.0803')
     ]
     
     # Sample coach types

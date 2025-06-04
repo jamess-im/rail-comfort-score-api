@@ -263,3 +263,6 @@ local_config.*
 output/
 outputs/
 results/ 
+
+# Mac
+.DS_Store

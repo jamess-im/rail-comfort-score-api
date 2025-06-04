@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import duckdb
 import pandas as pd
+import numpy as np
 import sqlite3
 from datetime import datetime, timedelta
 import warnings
@@ -54,8 +55,15 @@ def identify_api_required_data(duck_conn):
     stations_df = duck_conn.execute(station_query).fetchdf()
     print(f"  Unique stations in dataset: {len(stations_df)}")
     
-    # Parse coordinates
-    stations_df[['latitude', 'longitude']] = stations_df['station_location'].str.split(',', expand=True).astype(float)
+    # Parse coordinates - handle empty strings
+    coord_split = stations_df['station_location'].str.split(',', expand=True)
+    coord_split = coord_split.replace('', np.nan)  # Replace empty strings with NaN
+    stations_df[['latitude', 'longitude']] = coord_split.astype(float)
+    
+    # Fill missing coordinates with UK center coordinates (approximate)
+    stations_df['latitude'].fillna(54.0, inplace=True)  # UK center latitude
+    stations_df['longitude'].fillna(-2.0, inplace=True)  # UK center longitude
+    
     stations_df = stations_df.drop('station_location', axis=1)
     print(f"  Station coordinates parsed successfully")
     
