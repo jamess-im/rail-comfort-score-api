@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 FastAPI Application for Train Comfort Predictor
-Tasks 7.1-7.4: API Development
 """
 
 import os
@@ -56,7 +55,7 @@ class ComfortPrediction(BaseModel):
 
 @app.on_event("startup")
 async def load_model_and_database():
-    """Task 7.2: Load model and supporting files at API startup."""
+    """Load model and supporting files at API startup."""
     global model, scaler, target_encoder, feature_encoders, feature_list
 
     print("=== LOADING MODEL AND ARTIFACTS ===")
@@ -538,7 +537,7 @@ def construct_feature_vector(
 
 @app.post("/predict_comfort_first_leg", response_model=ComfortPrediction)
 async def predict_comfort(request: PredictionRequest):
-    """Task 7.3: Implement API endpoint for comfort prediction."""
+    """Implement API endpoint for comfort prediction."""
 
     try:
         # Parse and validate inputs

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 API Data Preparation for Train Comfort Predictor
-Tasks 6.1-6.2: Create SQLite database for API lookups from fixed MVP DuckDB dataset
 """
 
 import sys
@@ -30,8 +29,8 @@ def connect_to_duckdb():
 
 
 def identify_api_required_data(duck_conn):
-    """Task 6.1: Identify data required by the API at prediction time."""
-    print("\n=== IDENTIFYING API REQUIRED DATA (Task 6.1) ===")
+    """Identify data required by the API at prediction time."""
+    print("\n=== IDENTIFYING API REQUIRED DATA ===")
     
     # Get basic dataset info
     query = "SELECT COUNT(*) as total_records FROM train_journey_legs"
@@ -141,7 +140,7 @@ def identify_api_required_data(duck_conn):
     for _, row in coach_info_df.iterrows():
         print(f"    {row['coach_type']}: avg capacity {row['avg_capacity']:.0f}, frequency {row['frequency']}")
     
-    print("\n=== TASK 6.1 COMPLETE ===")
+    print("\n=== COMPLETE ===")
     
     return {
         'stations': stations_df,
@@ -152,8 +151,8 @@ def identify_api_required_data(duck_conn):
 
 
 def create_sqlite_database_and_populate(api_data):
-    """Task 6.2: Create SQLite database and populate tables."""
-    print("\n=== CREATING SQLITE DATABASE (Task 6.2) ===")
+    """Create SQLite database and populate tables."""
+    print("\n=== CREATING SQLITE DATABASE ===")
     
     # Create SQLite database
     db_path = 'api/train_comfort_api_lookups.sqlite'
@@ -259,7 +258,7 @@ def create_sqlite_database_and_populate(api_data):
     finally:
         conn.close()
     
-    print("=== TASK 6.2 COMPLETE ===")
+    print("=== COMPLETE ===")
     return db_path
 
 
@@ -334,7 +333,7 @@ def validate_api_database(db_path):
 
 
 def api_data_preparation_pipeline():
-    """Complete API data preparation pipeline for Tasks 6.1-6.2."""
+    """Complete API data preparation pipeline."""
     print("=== STARTING API DATA PREPARATION PIPELINE ===")
     
     # Connect to DuckDB
@@ -344,10 +343,10 @@ def api_data_preparation_pipeline():
         return None
     
     try:
-        # Task 6.1: Identify required data
+        # Identify required data
         api_data = identify_api_required_data(duck_conn)
         
-        # Task 6.2: Create SQLite database
+        # Create SQLite database
         db_path = create_sqlite_database_and_populate(api_data)
         
         # Validate the created database
@@ -361,7 +360,7 @@ def api_data_preparation_pipeline():
             print(f"  - {len(api_data['service_routes'])} service route patterns")
             print(f"  - {len(api_data['historical_stats'])} historical average patterns")
             print(f"  - {len(api_data['coach_info'])} coach type configurations")
-            print("\nReady for API development (Tasks 7.1-7.4)!")
+            print("\nReady for API run!")
             return db_path
         else:
             print("❌ Database validation failed")

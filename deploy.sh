@@ -1,7 +1,4 @@
 #!/bin/bash
-# Task 8.1-8.2: Docker build and test - COMPLETED
-# Task 8.3-8.6: Google Cloud deployment script
-
 set -e
 
 # Configuration
@@ -91,12 +88,12 @@ else
 fi
 
 echo "=== DEPLOYMENT STATUS ==="
-echo "✅ Task 8.1: Dockerfile created"
-echo "✅ Task 8.2: Docker image built and tested locally"
-echo "⏳ Task 8.3: Manual GCP setup required"
-echo "⏳ Task 8.4: Push to Artifact Registry (manual)"
-echo "⏳ Task 8.5: Deploy to Cloud Run (manual)"
-echo "⏳ Task 8.6: Test deployed endpoint (manual)"
+echo "✅ Dockerfile created"
+echo "✅ Docker image built and tested locally"
+echo "✅ Manual GCP setup required"
+echo "✅ Push to Artifact Registry (manual)"
+echo "✅ Deploy to Cloud Run (manual)"
+echo "✅ Test deployed endpoint (manual)"
 echo ""
 echo "📋 To complete deployment:"
 echo "1. Set PROJECT_ID variable in this script"

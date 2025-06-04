@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Feature Selection for Train Comfort Predictor
-Task 4.5: Select Features for Model Training (X variable)
+Select Features for Model Training (X variable)
 """
 
 import sys
@@ -14,9 +14,9 @@ warnings.filterwarnings('ignore')
 
 def select_model_features(df):
     """Select optimal features for XGBoost model training."""
-    print("=== STARTING FEATURE SELECTION (Task 4.5) ===")
+    print("=== STARTING FEATURE SELECTION ===")
     
-    # Define feature categories based on Task 4.5 requirements
+    # Define feature categories
     
     # Time features
     time_features = [
@@ -127,7 +127,7 @@ def select_model_features(df):
 
 
 def feature_selection_pipeline():
-    """Complete feature selection pipeline for Task 4.5."""
+    """Complete feature selection pipeline."""
     print("=== FEATURE SELECTION PIPELINE ===")
     
     # Get processed data from previous tasks
@@ -146,7 +146,7 @@ def feature_selection_pipeline():
         'y_shape': y.shape
     }
     
-    print(f"\n=== TASK 4.5 COMPLETE ===")
+    print(f"\n=== COMPLETE ===")
     print(f"Feature matrix ready: {X.shape}")
     print(f"Target vector ready: {y.shape}")
     print(f"Ready for XGBoost model training!")

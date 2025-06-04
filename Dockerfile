@@ -1,4 +1,4 @@
-# Task 8.1: Dockerfile for Train Comfort Predictor API
+# Dockerfile for Train Comfort Predictor API
 FROM python:3.11-slim
 
 # Set working directory

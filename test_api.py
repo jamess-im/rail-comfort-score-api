@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script for Train Comfort Predictor API
-Task 8.6: Test the deployed API endpoint
+Test the deployed API endpoint
 """
 
 import requests

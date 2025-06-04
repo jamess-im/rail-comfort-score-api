@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Target Variable Definition for Train Comfort Predictor
-Task 4.4: Define Target Variable (comfort_tier) based on relevant_passengers_on_leg_departure
+Define Target Variable (comfort_tier) based on relevant_passengers_on_leg_departure
 """
 
 import duckdb
@@ -182,10 +182,10 @@ def analyze_target_by_features(df):
 
 
 def target_variable_pipeline():
-    """Complete target variable definition pipeline for Task 4.4."""
-    print("=== STARTING TARGET VARIABLE DEFINITION (Task 4.4) ===")
+    """Complete target variable definition pipeline."""
+    print("=== STARTING TARGET VARIABLE DEFINITION ===")
     
-    # Get engineered features from Task 4.3
+    # Get engineered features
     df, encoders = feature_engineering_pipeline()
     
     # Analyze occupancy distribution
@@ -201,14 +201,14 @@ def target_variable_pipeline():
     analyze_target_by_features(df)
     
     # Summary
-    print(f"\n=== TASK 4.4 SUMMARY ===")
+    print(f"\n=== COMPLETE ===")
     print(f"Target variable: comfort_tier")
     print(f"Classes: {list(target_encoder.classes_)}")
     print(f"Encoding: {dict(zip(target_encoder.classes_, range(len(target_encoder.classes_))))}")
     print(f"Thresholds: Quiet ≤ {low_threshold:.1f}%, Moderate {low_threshold:.1f}%-{high_threshold:.1f}%, Busy > {high_threshold:.1f}%")
     print(f"Dataset shape: {df.shape}")
     
-    print(f"\n=== TASK 4.4 COMPLETE ===")
+    print(f"\n=== COMPLETE ===")
     return df, target_encoder, encoders, (low_threshold, high_threshold)
 
 

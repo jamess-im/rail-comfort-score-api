@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 XGBoost Model Training for Train Comfort Predictor
-Tasks 5.1-5.6: Train and evaluate XGBoost classifier
 """
 
 import sys
@@ -23,8 +22,8 @@ warnings.filterwarnings('ignore')
 
 
 def split_data(X, y, test_size=0.2, random_state=42):
-    """Task 5.1: Split data into training and testing sets."""
-    print("=== STARTING DATA SPLITTING (Task 5.1) ===")
+    """Split data into training and testing sets."""
+    print("=== STARTING DATA SPLITTING ===")
     
     # Stratified split to ensure balanced classes in train/test
     X_train, X_test, y_train, y_test = train_test_split(
@@ -50,13 +49,13 @@ def split_data(X, y, test_size=0.2, random_state=42):
         tier_name = ['Busy', 'Moderate', 'Quiet'][idx]
         print(f"  {tier_name} ({idx}): {count} ({count/len(y_test)*100:.1f}%)")
     
-    print("=== TASK 5.1 COMPLETE ===")
+    print("=== COMPLETE ===")
     return X_train, X_test, y_train, y_test
 
 
 def create_preprocessing_pipeline(X_train, X_test):
-    """Task 5.2: Create preprocessing pipeline (if needed)."""
-    print("\n=== PREPROCESSING PIPELINE (Task 5.2) ===")
+    """Create preprocessing pipeline (if needed)."""
+    print("\n=== PREPROCESSING PIPELINE ===")
     
     # For XGBoost, we generally don't need scaling, but let's check for consistency
     # Most features are already properly encoded or scaled
@@ -94,13 +93,13 @@ def create_preprocessing_pipeline(X_train, X_test):
         return X_train_scaled, X_test_scaled, scaler
     else:
         print("No preprocessing needed - feature scales are appropriate for XGBoost")
-        print("=== TASK 5.2 COMPLETE ===")
+        print("=== COMPLETE ===")
         return X_train, X_test, None
 
 
 def train_xgboost_model(X_train, y_train, X_test, y_test):
-    """Task 5.3: Train XGBoost classifier."""
-    print("\n=== TRAINING XGBOOST MODEL (Task 5.3) ===")
+    """Train XGBoost classifier."""
+    print("\n=== TRAINING XGBOOST MODEL ===")
     
     # Initialize XGBoost classifier
     xgb_model = xgb.XGBClassifier(
@@ -127,13 +126,13 @@ def train_xgboost_model(X_train, y_train, X_test, y_test):
     print(f"Best iteration: {xgb_model.best_iteration}")
     print(f"Best score: {xgb_model.best_score:.4f}")
     
-    print("=== TASK 5.3 COMPLETE ===")
+    print("=== COMPLETE ===")
     return xgb_model
 
 
 def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
-    """Task 5.4: Model evaluation with comprehensive metrics."""
-    print("\n=== MODEL EVALUATION (Task 5.4) ===")
+    """Model evaluation with comprehensive metrics."""
+    print("\n=== MODEL EVALUATION ===")
     
     # Make predictions
     y_train_pred = model.predict(X_train)
@@ -193,7 +192,7 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
         avg_confidence = prob_df.loc[class_mask, class_name].mean()
         print(f"  {class_name}: Average confidence = {avg_confidence:.3f}")
     
-    print("=== TASK 5.4 COMPLETE ===")
+    print("=== COMPLETE ===")
     
     evaluation_results = {
         'train_accuracy': train_accuracy,
@@ -207,8 +206,8 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
 
 
 def hyperparameter_tuning(X_train, y_train):
-    """Task 5.5: Hyperparameter tuning using GridSearchCV."""
-    print("\n=== HYPERPARAMETER TUNING (Task 5.5) ===")
+    """Hyperparameter tuning using GridSearchCV."""
+    print("\n=== HYPERPARAMETER TUNING ===")
     
     # Define parameter grid for tuning
     param_grid = {
@@ -245,13 +244,13 @@ def hyperparameter_tuning(X_train, y_train):
     print(f"Best parameters: {grid_search.best_params_}")
     print(f"Best cross-validation score: {grid_search.best_score_:.4f}")
     
-    print("=== TASK 5.5 COMPLETE ===")
+    print("=== COMPLETE ===")
     return grid_search.best_estimator_, grid_search.best_params_
 
 
 def save_model_and_artifacts(model, scaler, feature_info, evaluation_results, best_params=None):
-    """Task 5.6: Save trained model and supporting files."""
-    print("\n=== SAVING MODEL AND ARTIFACTS (Task 5.6) ===")
+    """Save trained model and supporting files."""
+    print("\n=== SAVING MODEL AND ARTIFACTS ===")
     
     # Create models directory if it doesn't exist
     os.makedirs('models', exist_ok=True)
@@ -302,31 +301,31 @@ def save_model_and_artifacts(model, scaler, feature_info, evaluation_results, be
     joblib.dump(metadata, metadata_path)
     print(f"Model metadata saved to: {metadata_path}")
     
-    print("=== TASK 5.6 COMPLETE ===")
+    print("=== COMPLETE ===")
     return metadata
 
 
 def xgboost_training_pipeline():
-    """Complete XGBoost training pipeline for Tasks 5.1-5.6."""
+    """Complete XGBoost training pipeline."""
     print("=== STARTING XGBOOST TRAINING PIPELINE ===")
     
     # Get processed data from feature selection
     X, y, feature_info, df = feature_selection_pipeline()
     
-    # Task 5.1: Split data
+    # Split data
     X_train, X_test, y_train, y_test = split_data(X, y)
     
-    # Task 5.2: Preprocessing
+    # Preprocessing
     X_train_processed, X_test_processed, scaler = create_preprocessing_pipeline(X_train, X_test)
     
-    # Task 5.3: Train initial model
+    # Train initial model
     initial_model = train_xgboost_model(X_train_processed, y_train, X_test_processed, y_test)
     
-    # Task 5.4: Evaluate initial model
+    # Evaluate initial model
     initial_results = evaluate_model(initial_model, X_train_processed, X_test_processed, 
                                    y_train, y_test, feature_info['feature_list'])
     
-    # Task 5.5: Hyperparameter tuning
+    # Hyperparameter tuning
     print("\nPerforming hyperparameter tuning...")
     tuned_model, best_params = hyperparameter_tuning(X_train_processed, y_train)
     
@@ -346,7 +345,7 @@ def xgboost_training_pipeline():
         final_results = initial_results
         best_params = None
     
-    # Task 5.6: Save model and artifacts
+    # Save model and artifacts
     metadata = save_model_and_artifacts(final_model, scaler, feature_info, final_results, best_params)
     
     print("\n=== XGBOOST TRAINING PIPELINE COMPLETE ===")

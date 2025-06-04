@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Data Exploration and EDA for Train Comfort Predictor
-Tasks 4.1-4.2: Load and explore train_journey_legs data
 """
 
 import duckdb
@@ -15,12 +14,12 @@ warnings.filterwarnings('ignore')
 
 
 def explore_data():
-    """Complete data exploration for tasks 4.1 and 4.2."""
+    """Complete data exploration."""
     
     print("=== STARTING DATA EXPLORATION ===")
     
-    # Task 4.1: Load train_journey_legs into Pandas DataFrame
-    print("\n--- Task 4.1: Loading data ---")
+    # Load train_journey_legs into Pandas DataFrame
+    print("\n--- Loading data ---")
     conn = duckdb.connect('duck')
     
     query = "SELECT * FROM train_journey_legs"
@@ -31,8 +30,8 @@ def explore_data():
     print(f"Columns: {len(df.columns)}")
     print(f"Rows: {len(df)}")
     
-    # Task 4.2: Exploratory Data Analysis
-    print("\n--- Task 4.2: Exploratory Data Analysis ---")
+    # Exploratory Data Analysis
+    print("\n--- Exploratory Data Analysis ---")
     
     # Basic info
     print("\n=== DATASET INFO ===")
@@ -144,9 +143,9 @@ def explore_data():
     print(f"Outliers in target: {len(outliers)} ({len(outliers)/len(df)*100:.1f}%)")
     
     conn.close()
-    print("\n=== TASKS 4.1 & 4.2 COMPLETE ===")
+    print("\n=== COMPLETE ===")
     print("Database connection closed.")
-    print("Ready to proceed with feature engineering (Task 4.3)")
+    print("Ready to proceed with feature engineering")
     
     return df
 
