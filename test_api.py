@@ -10,27 +10,27 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-API_BASE_URL = "http://localhost:8000"  # Change for deployed version
+API_BASE_URL = "http://localhost:8001"  # Change for deployed version
 TEST_REQUESTS = [
     {
-        "from_station": "London Paddington",
-        "to_station": "Reading",
-        "departure_datetime": "2024-01-15T08:30:00"
+        "from_tiploc": "PADTON",  # London Paddington
+        "to_tiploc": "READING",  # Reading
+        "departure_datetimes": ["2024-01-15T08:30:00"]
     },
     {
-        "from_station": "Manchester Piccadilly",
-        "to_station": "Liverpool Lime Street",
-        "departure_datetime": "2024-01-15T17:45:00"
+        "from_tiploc": "MNCRPIC",  # Manchester Piccadilly
+        "to_tiploc": "LIVRLST",   # Liverpool Lime Street
+        "departure_datetimes": ["2024-01-15T17:45:00"]
     },
     {
-        "from_station": "Birmingham New Street",
-        "to_station": "London Euston",
-        "departure_datetime": "2024-01-15T12:15:00"
+        "from_tiploc": "BHMNEWST", # Birmingham New Street
+        "to_tiploc": "EUSTON",    # London Euston
+        "departure_datetimes": ["2024-01-15T12:15:00"]
     },
     {
-        "from_station": "Edinburgh Waverley",
-        "to_station": "Glasgow Central",
-        "departure_datetime": "2024-01-15T09:00:00"
+        "from_tiploc": "EDINBUR",  # Edinburgh Waverley
+        "to_tiploc": "GLAS",      # Glasgow Central
+        "departure_datetimes": ["2024-01-15T09:00:00"]
     }
 ]
 
@@ -78,7 +78,7 @@ def test_prediction_endpoint():
     total_tests = len(TEST_REQUESTS)
     
     for i, test_request in enumerate(TEST_REQUESTS, 1):
-        print(f"\nTest {i}/{total_tests}: {test_request['from_station']} → {test_request['to_station']}")
+        print(f"\nTest {i}/{total_tests}: {test_request['from_tiploc']} → {test_request['to_tiploc']}")
         
         try:
             response = requests.post(
@@ -91,11 +91,14 @@ def test_prediction_endpoint():
             if response.status_code == 200:
                 result = response.json()
                 print("✅ Prediction successful")
-                print(f"   Standard Class: {result['standard_class']['comfort_tier']} "
-                      f"(confidence: {result['standard_class']['confidence']:.2f})")
-                print(f"   First Class: {result['first_class']['comfort_tier']} "
-                      f"(confidence: {result['first_class']['confidence']:.2f})")
-                print(f"   Service: {result['service_info']}")
+                # Get the first (and only) prediction from the batch response
+                prediction = result['predictions'][0]
+                print(f"   From: {prediction['from_station']} → To: {prediction['to_station']}")
+                print(f"   Standard Class: {prediction['standard_class']['comfort_tier']} "
+                      f"(confidence: {prediction['standard_class']['confidence']:.2f})")
+                print(f"   First Class: {prediction['first_class']['comfort_tier']} "
+                      f"(confidence: {prediction['first_class']['confidence']:.2f})")
+                print(f"   Service: {prediction['service_info']}")
                 success_count += 1
             else:
                 print(f"❌ Prediction failed: {response.status_code}")
@@ -119,20 +122,20 @@ def test_invalid_requests():
     invalid_requests = [
         # Missing required fields
         {
-            "from_station": "London Paddington",
-            "departure_datetime": "2024-01-15T08:30:00"
+            "from_tiploc": "PADTON",
+            "departure_datetimes": ["2024-01-15T08:30:00"]
         },
         # Invalid datetime format
         {
-            "from_station": "London Paddington",
-            "to_station": "Reading",
-            "departure_datetime": "invalid-date"
+            "from_tiploc": "PADTON",
+            "to_tiploc": "READING",
+            "departure_datetimes": ["invalid-date"]
         },
         # Non-existent station
         {
-            "from_station": "Nonexistent Station",
-            "to_station": "Reading",
-            "departure_datetime": "2024-01-15T08:30:00"
+            "from_tiploc": "INVALID",
+            "to_tiploc": "READING",
+            "departure_datetimes": ["2024-01-15T08:30:00"]
         }
     ]
     
@@ -178,6 +181,118 @@ def test_api_documentation():
         return False
 
 
+def test_batch_prediction():
+    """Test batch comfort prediction endpoint with multiple datetimes."""
+    
+    print("\n=== Testing Batch Prediction ===")
+    
+    # Test data with multiple departure times
+    test_request = {
+        "from_tiploc": "EUSTON",  # London Euston
+        "to_tiploc": "BRMNGM",   # Birmingham
+        "departure_datetimes": [
+            "2024-01-15T08:30:00",  # Morning rush
+            "2024-01-15T12:00:00",  # Midday
+            "2024-01-15T17:30:00"   # Evening rush
+        ]
+    }
+    
+    print("Testing batch comfort prediction...")
+    print(f"Request: {json.dumps(test_request, indent=2)}")
+    
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/predict_comfort_first_leg",
+            json=test_request,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            print("\n✅ Success!")
+            print(f"Number of predictions returned: {len(result['predictions'])}")
+            
+            for i, prediction in enumerate(result['predictions']):
+                print(f"\n--- Prediction {i+1} ---")
+                print(f"From: {prediction['from_station']} ({prediction['from_tiploc']})")
+                print(f"To: {prediction['to_station']} ({prediction['to_tiploc']})")
+                print(f"Departure: {prediction['departure_datetime']}")
+                print(f"Standard Class: {prediction['standard_class']['comfort_tier']} "
+                      f"(confidence: {prediction['standard_class']['confidence']:.2f}, "
+                      f"score: {prediction['standard_class']['numeric_score']})")
+                print(f"First Class: {prediction['first_class']['comfort_tier']} "
+                      f"(confidence: {prediction['first_class']['confidence']:.2f}, "
+                      f"score: {prediction['first_class']['numeric_score']})")
+                print(f"Service: {prediction['service_info']['headcode']} / {prediction['service_info']['rsid']}")
+                print(f"Next Stop: {prediction['service_info']['next_stop']}")
+            return True
+        else:
+            print(f"❌ Error {response.status_code}: {response.text}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request failed: {e}")
+        return False
+
+
+def test_single_datetime_batch():
+    """Test with a single datetime (should still work)."""
+    
+    print("\n=== Testing Single Datetime Batch ===")
+    
+    test_request = {
+        "from_tiploc": "EUSTON",
+        "to_tiploc": "BRMNGM", 
+        "departure_datetimes": ["2024-01-15T08:30:00"]  # Single datetime in array
+    }
+    
+    print("Testing single datetime in batch format...")
+    print(f"Request: {json.dumps(test_request, indent=2)}")
+    
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/predict_comfort_first_leg",
+            json=test_request,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            print("✅ Single datetime batch test successful!")
+            print(f"Returned {len(result['predictions'])} prediction(s)")
+            return True
+        else:
+            print(f"❌ Error {response.status_code}: {response.text}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request failed: {e}")
+        return False
+
+
+def test_health_check():
+    """Test health check endpoint."""
+    print("\n=== Testing Health Check ===")
+    
+    try:
+        response = requests.get(f"{API_BASE_URL}/health", timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print("✅ Health check successful!")
+            print(f"Status: {result['status']}")
+            print(f"Model loaded: {result['model_loaded']}")
+            print(f"Database connected: {result['database_connected']}")
+            return True
+        else:
+            print(f"❌ Health check failed: {response.status_code}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Health check request failed: {e}")
+        return False
+
+
 def main():
     """Run all API tests."""
     print("🚂 Train Comfort Predictor API Test Suite")
@@ -209,7 +324,10 @@ def main():
         ("Stations Endpoint", test_stations_endpoint),
         ("Prediction Endpoint", test_prediction_endpoint),
         ("Error Handling", test_invalid_requests),
-        ("API Documentation", test_api_documentation)
+        ("API Documentation", test_api_documentation),
+        ("Batch Prediction", test_batch_prediction),
+        ("Single Datetime Batch", test_single_datetime_batch),
+        ("Health Check", test_health_check)
     ]
     
     results = {}

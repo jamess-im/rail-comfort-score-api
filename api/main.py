@@ -7,7 +7,7 @@ import os
 import sqlite3
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Union
 
 import joblib
 import numpy as np
@@ -37,20 +37,28 @@ db_path = "train_comfort_api_lookups.sqlite"
 class PredictionRequest(BaseModel):
     """Request model for comfort prediction."""
 
-    from_station: str
-    to_station: str
-    departure_datetime: str  # ISO format: "2024-01-15T08:30:00"
+    from_tiploc: str
+    to_tiploc: str
+    departure_datetimes: List[str]  # Array of ISO format datetimes: ["2024-01-15T08:30:00", "2024-01-15T09:30:00"]
 
 
 class ComfortPrediction(BaseModel):
     """Response model for comfort prediction."""
 
-    from_station: str
-    to_station: str
+    from_tiploc: str
+    to_tiploc: str
+    from_station: str  # Station name resolved from TIPLOC
+    to_station: str    # Station name resolved from TIPLOC
     departure_datetime: str
     standard_class: Dict[str, Any]  # {"comfort_tier": "Moderate", "confidence": 0.85, "numeric_score": 2}
     first_class: Dict[str, Any]
     service_info: Dict[str, str]  # headcode, rsid, etc.
+
+
+class BatchComfortPrediction(BaseModel):
+    """Response model for batch comfort predictions."""
+    
+    predictions: List[ComfortPrediction]
 
 
 @app.on_event("startup")
@@ -128,13 +136,35 @@ def parse_datetime(datetime_str: str) -> datetime:
         )
 
 
-def get_station_coordinates(station_name: str) -> Optional[tuple]:
-    """Get station coordinates from database."""
+def get_station_coordinates(tiploc: str) -> Optional[tuple]:
+    """Get station coordinates from database using TIPLOC."""
     conn = sqlite3.connect(db_path)
     try:
-        query = "SELECT latitude, longitude FROM stations WHERE station_name = ?"
-        result = conn.execute(query, (station_name,)).fetchone()
+        query = "SELECT latitude, longitude FROM stations WHERE tiploc = ?"
+        result = conn.execute(query, (tiploc,)).fetchone()
         return result if result else None
+    finally:
+        conn.close()
+
+
+def get_station_name_from_tiploc(tiploc: str) -> Optional[str]:
+    """Get station name from TIPLOC."""
+    conn = sqlite3.connect(db_path)
+    try:
+        query = "SELECT station_name FROM stations WHERE tiploc = ?"
+        result = conn.execute(query, (tiploc,)).fetchone()
+        return result[0] if result else None
+    finally:
+        conn.close()
+
+
+def get_tiploc_from_station_name(station_name: str) -> Optional[str]:
+    """Get TIPLOC from station name (for fallback lookups)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        query = "SELECT tiploc FROM stations WHERE station_name = ?"
+        result = conn.execute(query, (station_name,)).fetchone()
+        return result[0] if result else None
     finally:
         conn.close()
 
@@ -295,6 +325,8 @@ def get_historical_averages(
 
 
 def construct_feature_vector(
+    from_tiploc: str,
+    to_tiploc: str,
     from_station: str,
     to_station: str,
     departure_dt: datetime,
@@ -304,12 +336,12 @@ def construct_feature_vector(
 ) -> pd.DataFrame:
     """Construct feature vector for XGBoost model."""
 
-    # Get station coordinates
-    from_coords = get_station_coordinates(from_station)
-    to_coords = get_station_coordinates(to_station)
+    # Get station coordinates using TIPLOCs
+    from_coords = get_station_coordinates(from_tiploc)
+    to_coords = get_station_coordinates(to_tiploc)
 
     if not from_coords or not to_coords:
-        raise HTTPException(status_code=404, detail="Station coordinates not found")
+        raise HTTPException(status_code=404, detail="Station coordinates not found for provided TIPLOCs")
 
     # Calculate route distance (simple Euclidean for now)
     from_lat, from_lon = from_coords
@@ -535,94 +567,118 @@ def construct_feature_vector(
     return feature_df
 
 
-@app.post("/predict_comfort_first_leg", response_model=ComfortPrediction)
+@app.post("/predict_comfort_first_leg", response_model=BatchComfortPrediction)
 async def predict_comfort(request: PredictionRequest):
     """Implement API endpoint for comfort prediction."""
 
     try:
         # Parse and validate inputs
-        departure_dt = parse_datetime(request.departure_datetime)
+        departure_dts = [parse_datetime(dt) for dt in request.departure_datetimes]
 
-        # Identify relevant service and actual next stop
-        service_info = identify_service_and_next_stop(
-            request.from_station, request.to_station, departure_dt
-        )
+        # Convert TIPLOCs to station names for service lookup (same for all predictions)
+        from_station = get_station_name_from_tiploc(request.from_tiploc)
+        to_station = get_station_name_from_tiploc(request.to_tiploc)
 
-        # Fetch historical averages for arrival state
-        historical_data = get_historical_averages(
-            service_info["headcode"],
-            service_info["rsid"],
-            request.from_station,
-            departure_dt,
-        )
+        if not from_station:
+            raise HTTPException(status_code=404, detail=f"Station not found for TIPLOC: {request.from_tiploc}")
+        if not to_station:
+            raise HTTPException(status_code=404, detail=f"Station not found for TIPLOC: {request.to_tiploc}")
 
-        # Construct feature vectors for both Standard and First Class
-        std_features = construct_feature_vector(
-            request.from_station,
-            request.to_station,
-            departure_dt,
-            service_info,
-            historical_data,
-            "Standard",
-        )
+        predictions = []
+        
+        # Process each datetime separately
+        for departure_dt in departure_dts:
+            # Identify relevant service and actual next stop (uses station names)
+            service_info = identify_service_and_next_stop(
+                from_station, to_station, departure_dt
+            )
 
-        first_features = construct_feature_vector(
-            request.from_station,
-            request.to_station,
-            departure_dt,
-            service_info,
-            historical_data,
-            "First Class",
-        )
+            # Fetch historical averages for arrival state (uses station names)
+            historical_data = get_historical_averages(
+                service_info["headcode"],
+                service_info["rsid"],
+                from_station,
+                departure_dt,
+            )
 
-        # Apply scaling if needed
-        if scaler:
-            std_features_scaled = std_features.copy()
-            first_features_scaled = first_features.copy()
-            # Apply scaling to specific columns if scaler exists
-        else:
-            std_features_scaled = std_features
-            first_features_scaled = first_features
+            # Construct feature vectors for both Standard and First Class
+            std_features = construct_feature_vector(
+                request.from_tiploc,
+                request.to_tiploc,
+                from_station,
+                to_station,
+                departure_dt,
+                service_info,
+                historical_data,
+                "Standard",
+            )
 
-        # Make predictions
-        std_proba = model.predict_proba(std_features_scaled)[0]
-        first_proba = model.predict_proba(first_features_scaled)[0]
+            first_features = construct_feature_vector(
+                request.from_tiploc,
+                request.to_tiploc,
+                from_station,
+                to_station,
+                departure_dt,
+                service_info,
+                historical_data,
+                "First Class",
+            )
 
-        # Get class names and create numeric mapping
-        class_names = ["Busy", "Moderate", "Quiet"]
-        # Numeric score: 1=Busy (least comfortable), 2=Moderate, 3=Quiet (most comfortable)
-        class_to_numeric = {"Busy": 1, "Moderate": 2, "Quiet": 3}
+            # Apply scaling if needed
+            if scaler:
+                std_features_scaled = std_features.copy()
+                first_features_scaled = first_features.copy()
+                # Apply scaling to specific columns if scaler exists
+            else:
+                std_features_scaled = std_features
+                first_features_scaled = first_features
 
-        # Format predictions
-        std_predicted_class = class_names[np.argmax(std_proba)]
-        std_prediction = {
-            "comfort_tier": std_predicted_class,
-            "confidence": float(np.max(std_proba)),
-            "numeric_score": class_to_numeric[std_predicted_class],
-        }
+            # Make predictions
+            std_proba = model.predict_proba(std_features_scaled)[0]
+            first_proba = model.predict_proba(first_features_scaled)[0]
 
-        first_predicted_class = class_names[np.argmax(first_proba)]
-        first_prediction = {
-            "comfort_tier": first_predicted_class,
-            "confidence": float(np.max(first_proba)),
-            "numeric_score": class_to_numeric[first_predicted_class],
-        }
+            # Get class names and create numeric mapping
+            class_names = ["Busy", "Moderate", "Quiet"]
+            # Numeric score: 1=Busy (least comfortable), 2=Moderate, 3=Quiet (most comfortable)
+            class_to_numeric = {"Busy": 1, "Moderate": 2, "Quiet": 3}
 
-        return ComfortPrediction(
-            from_station=request.from_station,
-            to_station=request.to_station,
-            departure_datetime=request.departure_datetime,
-            standard_class=std_prediction,
-            first_class=first_prediction,
-            service_info={
-                "headcode": service_info["headcode"],
-                "rsid": service_info["rsid"],
-                "next_stop": service_info["next_stop"],
-                "fallback_used": str(service_info.get("fallback", False)),
-                "time_fallback": str(service_info.get("time_fallback", False)),
-                "route_fallback": str(service_info.get("route_fallback", False)),
-            },
-        )
+            # Format predictions
+            std_predicted_class = class_names[np.argmax(std_proba)]
+            std_prediction = {
+                "comfort_tier": std_predicted_class,
+                "confidence": float(np.max(std_proba)),
+                "numeric_score": class_to_numeric[std_predicted_class],
+            }
+
+            first_predicted_class = class_names[np.argmax(first_proba)]
+            first_prediction = {
+                "comfort_tier": first_predicted_class,
+                "confidence": float(np.max(first_proba)),
+                "numeric_score": class_to_numeric[first_predicted_class],
+            }
+
+            # Create individual prediction
+            prediction = ComfortPrediction(
+                from_tiploc=request.from_tiploc,
+                to_tiploc=request.to_tiploc,
+                from_station=from_station,
+                to_station=to_station,
+                departure_datetime=departure_dt.isoformat(),
+                standard_class=std_prediction,
+                first_class=first_prediction,
+                service_info={
+                    "headcode": service_info["headcode"],
+                    "rsid": service_info["rsid"],
+                    "next_stop": service_info["next_stop"],
+                    "fallback_used": str(service_info.get("fallback", False)),
+                    "time_fallback": str(service_info.get("time_fallback", False)),
+                    "route_fallback": str(service_info.get("route_fallback", False)),
+                },
+            )
+            
+            predictions.append(prediction)
+
+        return BatchComfortPrediction(predictions=predictions)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
@@ -640,15 +696,48 @@ async def health_check():
 
 @app.get("/stations")
 async def get_stations():
-    """Get list of available stations."""
+    """Get list of available stations with TIPLOCs."""
     conn = sqlite3.connect(db_path)
     try:
-        query = "SELECT station_name FROM stations ORDER BY station_name"
-        stations = [row[0] for row in conn.execute(query).fetchall()]
+        query = """
+        SELECT tiploc, station_name 
+        FROM stations 
+        WHERE tiploc IS NOT NULL 
+        ORDER BY station_name
+        """
+        stations = [
+            {"tiploc": row[0], "station_name": row[1]} 
+            for row in conn.execute(query).fetchall()
+        ]
         return {"stations": stations}
     finally:
         conn.close()
 
 
+@app.get("/tiplocs")
+async def get_tiplocs():
+    """Get list of available TIPLOCs."""
+    conn = sqlite3.connect(db_path)
+    try:
+        query = """
+        SELECT tiploc, station_name, tiploc_orig_desc, tiploc_orig_tps_desc
+        FROM stations 
+        WHERE tiploc IS NOT NULL 
+        ORDER BY tiploc
+        """
+        tiplocs = [
+            {
+                "tiploc": row[0], 
+                "station_name": row[1],
+                "tiploc_orig_desc": row[2],
+                "tiploc_orig_tps_desc": row[3]
+            } 
+            for row in conn.execute(query).fetchall()
+        ]
+        return {"tiplocs": tiplocs}
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
