@@ -266,3 +266,6 @@ results/
 
 # Mac
 .DS_Store
+
+# The duck db file
+duck
