@@ -5,15 +5,16 @@ services:
   train-comfort-api:
     build: .
     ports:
-      - "8000:8000"
+      - "8080:8080"
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - PORT=8080
     volumes:
       # Mount logs directory for debugging
       - ./logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

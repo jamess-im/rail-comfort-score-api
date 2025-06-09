@@ -31,7 +31,8 @@ scaler = None
 target_encoder = None
 feature_encoders = None
 feature_list = None
-db_path = "train_comfort_api_lookups.sqlite"
+# Set database path relative to this file's location
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_comfort_api_lookups.sqlite")
 
 
 class PredictionRequest(BaseModel):
@@ -69,8 +70,12 @@ async def load_model_and_database():
     print("=== LOADING MODEL AND ARTIFACTS ===")
 
     try:
+        # Determine base path for models
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        models_dir = os.path.join(base_path, "models")
+        
         # Load trained model
-        model_path = "../models/xgboost_comfort_classifier.joblib"
+        model_path = os.path.join(models_dir, "xgboost_comfort_classifier.joblib")
         if os.path.exists(model_path):
             model = joblib.load(model_path)
             print(f"✅ Model loaded from {model_path}")
@@ -79,25 +84,25 @@ async def load_model_and_database():
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
         # Load target encoder
-        target_encoder_path = "../models/target_encoder.joblib"
+        target_encoder_path = os.path.join(models_dir, "target_encoder.joblib")
         if os.path.exists(target_encoder_path):
             target_encoder = joblib.load(target_encoder_path)
             print("✅ Target encoder loaded")
 
         # Load feature encoders
-        encoders_path = "../models/feature_encoders.joblib"
+        encoders_path = os.path.join(models_dir, "feature_encoders.joblib")
         if os.path.exists(encoders_path):
             feature_encoders = joblib.load(encoders_path)
             print("✅ Feature encoders loaded")
 
         # Load feature list
-        feature_list_path = "../models/feature_list.joblib"
+        feature_list_path = os.path.join(models_dir, "feature_list.joblib")
         if os.path.exists(feature_list_path):
             feature_list = joblib.load(feature_list_path)
             print(f"✅ Feature list loaded: {len(feature_list)} features")
 
         # Load scaler if it exists
-        scaler_path = "../models/feature_scaler.joblib"
+        scaler_path = os.path.join(models_dir, "feature_scaler.joblib")
         if os.path.exists(scaler_path):
             scaler = joblib.load(scaler_path)
             print("✅ Scaler loaded")
@@ -740,4 +745,6 @@ async def get_tiplocs():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,5 +1,6 @@
 # Dockerfile for Train Comfort Predictor API
-FROM python:3.11-slim
+# Specify platform for Cloud Run compatibility
+FROM --platform=linux/amd64 python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -8,6 +9,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -34,11 +36,11 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"] 

@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-API_BASE_URL = "http://localhost:8001"  # Change for deployed version
+API_BASE_URL = "http://localhost:8080"  # Change for deployed version
 TEST_REQUESTS = [
     {
         "from_tiploc": "PADTON",  # London Paddington
