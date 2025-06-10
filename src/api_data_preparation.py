@@ -44,9 +44,9 @@ def connect_to_duckdb():
     """Connect to the main DuckDB database containing the MVP dataset."""
     print("=== CONNECTING TO DUCKDB DATABASE ===")
     try:
-        # Assuming your DuckDB database file is named 'duck' in the project root
+        # Assuming your DuckDB database file is named 'duck.db' in the project root
         # Adjust if it's in a subdirectory like 'data/duck.db'
-        conn = duckdb.connect('duck')
+        conn = duckdb.connect('duck.db')
         print("Successfully connected to DuckDB database ('duck')")
         return conn
     except Exception as e:

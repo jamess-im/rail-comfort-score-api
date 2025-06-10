@@ -20,6 +20,8 @@ from feature_selection import feature_selection_pipeline
 import warnings
 warnings.filterwarnings('ignore')
 
+# Note: This will be updated to use target_definition_simple_5tier after feature_selection.py is updated
+
 
 def split_data(X, y, test_size=0.2, random_state=42):
     """Split data into training and testing sets."""
@@ -40,13 +42,13 @@ def split_data(X, y, test_size=0.2, random_state=42):
     print(f"\nTraining set class distribution:")
     train_dist = pd.Series(y_train).value_counts().sort_index()
     for idx, count in train_dist.items():
-        tier_name = ['Busy', 'Moderate', 'Quiet'][idx]
+        tier_name = ['Very Busy', 'Busy', 'Moderate', 'Quiet', 'Very Quiet'][idx]
         print(f"  {tier_name} ({idx}): {count} ({count/len(y_train)*100:.1f}%)")
     
     print(f"\nTest set class distribution:")
     test_dist = pd.Series(y_test).value_counts().sort_index()
     for idx, count in test_dist.items():
-        tier_name = ['Busy', 'Moderate', 'Quiet'][idx]
+        tier_name = ['Very Busy', 'Busy', 'Moderate', 'Quiet', 'Very Quiet'][idx]
         print(f"  {tier_name} ({idx}): {count} ({count/len(y_test)*100:.1f}%)")
     
     print("=== COMPLETE ===")
@@ -98,13 +100,21 @@ def create_preprocessing_pipeline(X_train, X_test):
 
 
 def train_xgboost_model(X_train, y_train, X_test, y_test):
-    """Train XGBoost classifier."""
-    print("\n=== TRAINING XGBOOST MODEL ===")
+    """Train XGBoost classifier for 5-tier system."""
+    print("\n=== TRAINING XGBOOST MODEL (5-TIER) ===")
+    
+    # Calculate class weights for imbalanced data
+    from sklearn.utils.class_weight import compute_class_weight
+    classes = np.unique(y_train)
+    class_weights = compute_class_weight('balanced', classes=classes, y=y_train)
+    sample_weights = np.array([class_weights[i] for i in y_train])
+    
+    print(f"Class weights: {dict(zip(classes, class_weights))}")
     
     # Initialize XGBoost classifier
     xgb_model = xgb.XGBClassifier(
         objective='multi:softprob',  # Multi-class classification
-        num_class=3,  # Quiet, Moderate, Busy
+        num_class=5,  # Changed from 3 to 5
         random_state=42,
         eval_metric='mlogloss',
         early_stopping_rounds=10,
@@ -115,9 +125,10 @@ def train_xgboost_model(X_train, y_train, X_test, y_test):
     eval_set = [(X_train, y_train), (X_test, y_test)]
     eval_names = ['train', 'test']
     
-    print("Training XGBoost model...")
+    print("Training XGBoost model with class weights...")
     xgb_model.fit(
         X_train, y_train,
+        sample_weight=sample_weights,
         eval_set=eval_set,
         verbose=False
     )
@@ -147,7 +158,7 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
     print(f"Test Accuracy: {test_accuracy:.4f}")
     
     # Classification report
-    class_names = ['Busy', 'Moderate', 'Quiet']
+    class_names = ['Very Busy', 'Busy', 'Moderate', 'Quiet', 'Very Quiet']
     print(f"\nClassification Report (Test Set):")
     print(classification_report(y_test, y_test_pred, target_names=class_names))
     
@@ -157,7 +168,7 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
     print(cm)
     
     # Plot confusion matrix
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(15, 6))
     
     plt.subplot(1, 2, 1)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
@@ -283,9 +294,9 @@ def save_model_and_artifacts(model, scaler, feature_info, evaluation_results, be
     
     # Save model metadata
     metadata = {
-        'model_type': 'XGBoost Classifier',
+        'model_type': 'XGBoost Classifier (5-Tier)',
         'feature_count': feature_info['feature_count'],
-        'target_classes': ['Busy', 'Moderate', 'Quiet'],
+        'target_classes': ['Very Busy', 'Busy', 'Moderate', 'Quiet', 'Very Quiet'],
         'train_accuracy': evaluation_results['train_accuracy'],
         'test_accuracy': evaluation_results['test_accuracy'],
         'feature_list': feature_info['feature_list'],

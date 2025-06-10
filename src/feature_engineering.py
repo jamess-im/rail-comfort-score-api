@@ -102,6 +102,11 @@ def prepare_categorical_encoding(df):
     """Prepare categorical variables for encoding."""
     print("Preparing categorical encoding strategy...")
     
+    # Fix: Remove 'Mixed' from coach_type options
+    if 'coach_type' in df.columns:
+        # Ensure only Standard or First Class
+        df['coach_type'] = df['coach_type'].replace('Mixed', 'Standard')
+    
     # Define categorical columns that need encoding
     categorical_cols = ['coach_type', 'stationName_from', 'stationName_to', 
                        'headcode', 'rsid', 'time_period']
@@ -151,12 +156,48 @@ def create_occupancy_features(df):
     return df
 
 
+def create_simple_enhanced_features(df):
+    """Add high-value features without changing data structure."""
+    print("Creating enhanced features...")
+    
+    # Journey position estimate (simple heuristic)
+    london_station = 'London Kings Cross'
+    major_terminals = ['Edinburgh Waverley', 'Leeds', 'Newcastle', 'Aberdeen']
+    
+    # Simple journey progress indicator
+    df['is_origin_major'] = df['stationName_from'].isin([london_station] + major_terminals).astype(int)
+    df['is_destination_major'] = df['stationName_to'].isin([london_station] + major_terminals).astype(int)
+    
+    # Route popularity (simple encoding)
+    popular_routes = [
+        ('London Kings Cross', 'Leeds'),
+        ('London Kings Cross', 'Edinburgh Waverley'),
+        ('London Kings Cross', 'York'),
+        ('Leeds', 'London Kings Cross'),
+        ('Edinburgh Waverley', 'London Kings Cross')
+    ]
+    
+    df['is_popular_route'] = df.apply(
+        lambda x: (x['stationName_from'], x['stationName_to']) in popular_routes, 
+        axis=1
+    ).astype(int)
+    
+    # Add day of week patterns
+    df['is_monday'] = (df['day_of_week'] == 0).astype(int)
+    df['is_friday'] = (df['day_of_week'] == 4).astype(int)
+    df['is_sunday'] = (df['day_of_week'] == 6).astype(int)
+    
+    print(f"Added enhanced features: is_origin_major, is_destination_major, is_popular_route, is_monday, is_friday, is_sunday")
+    
+    return df
+
+
 def feature_engineering_pipeline():
     """Complete feature engineering pipeline"""
     print("=== STARTING FEATURE ENGINEERING ===")
     
     # Load data
-    conn = duckdb.connect('duck')
+    conn = duckdb.connect('duck.db')
     query = "SELECT * FROM train_journey_legs"
     df = conn.execute(query).fetchdf()
     
@@ -167,6 +208,7 @@ def feature_engineering_pipeline():
     df = extract_time_features(df)
     df = extract_location_features(df)
     df = create_occupancy_features(df)
+    df = create_simple_enhanced_features(df)
     df, encoders = prepare_categorical_encoding(df)
     
     # Summary of new features

@@ -308,22 +308,57 @@ def get_historical_averages(
         ).fetchone()
 
         if result:
-            return {
+            historical_data = {
                 "avg_vehicle_pax_on_arrival_std": result[0] or 0,
                 "avg_vehicle_pax_on_arrival_first": result[1] or 0,
                 "avg_total_unit_pax_on_arrival": result[2] or 0,
                 "avg_unit_boarders_at_station": result[3] or 0,
                 "avg_unit_alighters_at_station": result[4] or 0,
             }
-        else:
-            # Return default values if no historical data
-            return {
-                "avg_vehicle_pax_on_arrival_std": 50,
-                "avg_vehicle_pax_on_arrival_first": 10,
-                "avg_total_unit_pax_on_arrival": 60,
-                "avg_unit_boarders_at_station": 15,
-                "avg_unit_alighters_at_station": 10,
-            }
+            print(f"DEBUG - Found historical data: {historical_data}")
+            
+            # Check for problematic data patterns
+            total_pax = historical_data["avg_vehicle_pax_on_arrival_std"] + historical_data["avg_vehicle_pax_on_arrival_first"]
+            boarders = historical_data["avg_unit_boarders_at_station"]
+            alighters = historical_data["avg_unit_alighters_at_station"]
+            
+            # Filter out clearly bad data:
+            # 1. Zero occupancy but high boarding/alighting (data quality issue)
+            # 2. Extremely high boarding numbers (>150 is suspicious for most services)
+            # 3. Inconsistent patterns
+            if (total_pax == 0 and (boarders > 100 or alighters > 50)) or boarders > 150:
+                print(f"DEBUG - Filtering out bad historical data (zero occupancy + high boarding or excessive boarding)")
+                # Fall through to use time-aware defaults instead
+            else:
+                return historical_data
+        
+        # Return time-aware default values if no historical data OR bad data filtered out
+        hour = departure_dt.hour
+        is_weekend = departure_dt.weekday() >= 5
+        
+        # Define defaults based on time of day
+        if 0 <= hour <= 5:  # Night/early morning (very quiet)
+            base_std, base_first = (5, 2) if not is_weekend else (3, 1)
+        elif 6 <= hour <= 8:  # Early morning (quiet)
+            base_std, base_first = (15, 5) if not is_weekend else (10, 3)
+        elif 9 <= hour <= 16:  # Daytime (moderate)
+            base_std, base_first = (35, 8) if not is_weekend else (25, 6)
+        elif 17 <= hour <= 19:  # Evening peak (busy)
+            base_std, base_first = (60, 12) if not is_weekend else (45, 10)
+        elif 20 <= hour <= 22:  # Evening (moderate)
+            base_std, base_first = (25, 6) if not is_weekend else (20, 5)
+        else:  # Late night (quiet)
+            base_std, base_first = (8, 3) if not is_weekend else (5, 2)
+        
+        defaults = {
+            "avg_vehicle_pax_on_arrival_std": base_std,
+            "avg_vehicle_pax_on_arrival_first": base_first,
+            "avg_total_unit_pax_on_arrival": base_std + base_first,
+            "avg_unit_boarders_at_station": max(2, base_std // 4),
+            "avg_unit_alighters_at_station": max(1, base_std // 6),
+        }
+        print(f"DEBUG - Using time-aware defaults: {defaults}")
+        return defaults
 
     finally:
         conn.close()
@@ -497,6 +532,19 @@ def construct_feature_vector(
             / (89 if coach_type == "Standard" else 115)
         )
         * 100,
+        # Enhanced features
+        "is_origin_major": 1 if from_station in ['London Kings Cross', 'Edinburgh Waverley', 'Leeds', 'Newcastle', 'Aberdeen'] else 0,
+        "is_destination_major": 1 if to_station in ['London Kings Cross', 'Edinburgh Waverley', 'Leeds', 'Newcastle', 'Aberdeen'] else 0,
+        "is_popular_route": 1 if (from_station, to_station) in [
+            ('London Kings Cross', 'Leeds'),
+            ('London Kings Cross', 'Edinburgh Waverley'),
+            ('London Kings Cross', 'York'),
+            ('Leeds', 'London Kings Cross'),
+            ('Edinburgh Waverley', 'London Kings Cross')
+        ] else 0,
+        "is_monday": 1 if day_of_week == 0 else 0,
+        "is_friday": 1 if day_of_week == 4 else 0,
+        "is_sunday": 1 if day_of_week == 6 else 0,
     }
 
     # Encode categorical features
@@ -553,23 +601,26 @@ def construct_feature_vector(
             except ValueError:
                 features["time_period_encoded"] = 0
 
-    # Create DataFrame with only the features needed by the model
-    feature_df = pd.DataFrame([features])
-
-    # Select only the features that were used in training
-    if feature_list:
-        available_features = [f for f in feature_list if f in feature_df.columns]
-        feature_df = feature_df[available_features]
-
-        # Add missing features with default values
-        for feature in feature_list:
-            if feature not in feature_df.columns:
-                feature_df[feature] = 0
-
-        # Reorder to match training order
-        feature_df = feature_df[feature_list]
-
-    return feature_df
+    # Create feature vector in exact order expected by model
+    if not feature_list:
+        raise HTTPException(status_code=500, detail="Feature list not loaded")
+    
+    # Create ordered feature array
+    feature_vector = np.zeros(len(feature_list))
+    
+    for i, feature_name in enumerate(feature_list):
+        if feature_name in features:
+            feature_vector[i] = features[feature_name]
+        else:
+            # Handle missing features with appropriate defaults
+            if "encoded" in feature_name:
+                feature_vector[i] = 0  # Unknown categories default to 0
+            elif "percentage" in feature_name or "ratio" in feature_name:
+                feature_vector[i] = 10.0  # Low default for percentages
+            else:
+                feature_vector[i] = 0  # General default
+    
+    return feature_vector
 
 
 @app.post("/predict_comfort_first_leg", response_model=BatchComfortPrediction)
@@ -629,23 +680,43 @@ async def predict_comfort(request: PredictionRequest):
                 "First Class",
             )
 
-            # Apply scaling if needed
-            if scaler:
-                std_features_scaled = std_features.copy()
-                first_features_scaled = first_features.copy()
-                # Apply scaling to specific columns if scaler exists
-            else:
-                std_features_scaled = std_features
-                first_features_scaled = first_features
+            # Skip scaling for now - the model should work without it
+            # The scaler was trained on only 3 features but we have 42 features
+            std_features_scaled = std_features
+            first_features_scaled = first_features
 
-            # Make predictions
-            std_proba = model.predict_proba(std_features_scaled)[0]
-            first_proba = model.predict_proba(first_features_scaled)[0]
+            # Debug: Print feature values for troubleshooting
+            print(f"DEBUG - Feature vector shape: {std_features.shape}")
+            print(f"DEBUG - Hour: {departure_dt.hour}, Weekend: {departure_dt.weekday() >= 5}")
+            hour_idx = feature_list.index('hour_of_day') if 'hour_of_day' in feature_list else -1
+            weekend_idx = feature_list.index('is_weekend') if 'is_weekend' in feature_list else -1
+            occ_std_idx = feature_list.index('occupancy_percentage_std') if 'occupancy_percentage_std' in feature_list else -1
+            if hour_idx >= 0:
+                print(f"DEBUG - hour_of_day feature: {std_features[hour_idx]}")
+            if weekend_idx >= 0:
+                print(f"DEBUG - is_weekend feature: {std_features[weekend_idx]}")
+            if occ_std_idx >= 0:
+                print(f"DEBUG - occupancy_percentage_std: {std_features[occ_std_idx]}")
+
+            # Make predictions (reshape for model input)
+            std_proba = model.predict_proba(std_features_scaled.reshape(1, -1))[0]
+            first_proba = model.predict_proba(first_features_scaled.reshape(1, -1))[0]
+            
+            # Debug: Print prediction probabilities
+            class_names_debug = ["Very Busy", "Busy", "Moderate", "Quiet", "Very Quiet"]
+            print(f"DEBUG - Prediction probabilities: {dict(zip(class_names_debug, std_proba))}")
+            print(f"DEBUG - Predicted class: {class_names_debug[np.argmax(std_proba)]}")
 
             # Get class names and create numeric mapping
-            class_names = ["Busy", "Moderate", "Quiet"]
-            # Numeric score: 1=Busy (least comfortable), 2=Moderate, 3=Quiet (most comfortable)
-            class_to_numeric = {"Busy": 1, "Moderate": 2, "Quiet": 3}
+            class_names = ["Very Busy", "Busy", "Moderate", "Quiet", "Very Quiet"]
+            # Numeric score: 1=Very Busy (least comfortable) to 5=Very Quiet (most comfortable)
+            class_to_numeric = {
+                "Very Busy": 1,
+                "Busy": 2,
+                "Moderate": 3,
+                "Quiet": 4,
+                "Very Quiet": 5
+            }
 
             # Format predictions
             std_predicted_class = class_names[np.argmax(std_proba)]

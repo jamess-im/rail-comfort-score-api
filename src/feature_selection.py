@@ -7,7 +7,7 @@ Select Features for Model Training (X variable)
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from target_variable_definition import target_variable_pipeline
+from target_definition_simple_5tier import target_variable_pipeline_five_tier
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -62,10 +62,16 @@ def select_model_features(df):
         'boarding_ratio', 'alighting_ratio', 'capacity_utilization'
     ]
     
+    # Enhanced features
+    enhanced_features = [
+        'is_origin_major', 'is_destination_major', 'is_popular_route',
+        'is_monday', 'is_friday', 'is_sunday'
+    ]
+    
     # Combine all feature categories
     selected_features = (time_features + location_features + vehicle_features +
                          service_features + contextual_features +
-                         occupancy_features)
+                         occupancy_features + enhanced_features)
     
     # Verify all features exist in the dataframe
     available_features = []
@@ -120,7 +126,7 @@ def select_model_features(df):
     target_dist = y.value_counts().sort_index()
     print("\n=== TARGET DISTRIBUTION ===")
     for idx, count in target_dist.items():
-        tier_name = ['Busy', 'Moderate', 'Quiet'][idx]
+        tier_name = ['Very Busy', 'Busy', 'Moderate', 'Quiet', 'Very Quiet'][idx]
         print(f"{tier_name} ({idx}): {count} ({count/len(y)*100:.1f}%)")
     
     return X, y, available_features
@@ -131,7 +137,7 @@ def feature_selection_pipeline():
     print("=== FEATURE SELECTION PIPELINE ===")
     
     # Get processed data from previous tasks
-    df, target_encoder, encoders, thresholds = target_variable_pipeline()
+    df, target_encoder, encoders, thresholds = target_variable_pipeline_five_tier()
     
     # Select features
     X, y, feature_list = select_model_features(df)
