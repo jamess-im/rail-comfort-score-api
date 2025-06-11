@@ -337,6 +337,7 @@ def get_historical_averages(
         is_weekend = departure_dt.weekday() >= 5
         
         # Define defaults based on time of day
+        # Revert to original logical values since the model bias can't be easily overcome
         if 0 <= hour <= 5:  # Night/early morning (very quiet)
             base_std, base_first = (5, 2) if not is_weekend else (3, 1)
         elif 6 <= hour <= 8:  # Early morning (quiet)
@@ -397,7 +398,7 @@ def construct_feature_vector(
     is_weekend = 1 if day_of_week >= 5 else 0
     is_peak_hour = 1 if (7 <= hour_of_day <= 9) or (17 <= hour_of_day <= 19) else 0
 
-    # Time period encoding
+    # Time period encoding - revert to original logic
     if 0 <= hour_of_day < 6:
         time_period = "Night"
     elif 6 <= hour_of_day < 9:
